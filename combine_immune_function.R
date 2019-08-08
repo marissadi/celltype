@@ -44,14 +44,21 @@ combinedEstimates <- function(data, LM22 = NULL, AbbasGenes = NULL, datadir = NU
       pheatmap(toplot, cluster_cols = F, main = plottitle, treeheight_row = 0)
     }
     else {
-      annotatedpheatmap(toplot, annotfactor, annotname, sampnames, main = plottitle)
+      annotatedpheatmap(toplot, annotfactor, annotname, sampnames, main = plottitle, cluster_cols = ncol(toplot) > 1)
     }
   }
+  
+  
+  ##### CD8 proxy #####
+  message("CD8")
+  # data_cd8 <- apply(data, 2, function(x) sum(x[c("CD8A","CD8B")]))
+  data_cd8 <- data[c("CD8A","CD8B"),] %>% colSums %>% as.matrix %>% t %>% set_rownames("CD8A+CD8B")
+  
   
   ##### NNLS from CellMix #####
   message("NNLS")
   cm=intersect(rownames(data), rownames(AbbasGenes))
-  nnlsLM22=ged(data[cm,], AbbasGenes[cm,],'lsfit', fit = 'nnls')
+  nnlsLM22=ged(data[cm,,drop=F], AbbasGenes[cm,],'lsfit', fit = 'nnls')
   # nnlsLM22@fit@H %>% dim
   pickpheatmap(annotfactor, nnlsLM22@fit@H, "Immune infiltration: NNLS")
   
@@ -59,14 +66,14 @@ combinedEstimates <- function(data, LM22 = NULL, AbbasGenes = NULL, datadir = NU
   ##### CIBERSORT from EpiDISH #####
   message("CIBERSORT")
   cm=intersect(rownames(data), rownames(LM22))
-  CS22=epidish(data[cm,], LM22[cm,], method="CBS")
+  CS22=epidish(data[cm,,drop=F], LM22[cm,], method="CBS")
   # t(CS22$estF) %>% dim
   pickpheatmap(annotfactor, t(CS22$estF), "Immune infiltration: CIBERSORT")
   
   
   ##### ESTIMATE #####
   message("ESTIMATE")
-  data[unique(rownames(data)), ] %>%
+  data[unique(rownames(data)), ,drop=F] %>%
     write.table(file=file.path(outdir,paste0(fileprefix, "data.txt")), quote = F, sep = '\t')
   # unify different number of genes per microarray platforms to 10,412 common genes
   filterCommonGenes(
@@ -108,8 +115,8 @@ combinedEstimates <- function(data, LM22 = NULL, AbbasGenes = NULL, datadir = NU
   
   
   ##### Combine the datasets #####
-  print(all(sapply(list(colnames(t(CS22$estF)), colnames(data_estimate), colnames(data_mcp), colnames(data_xcell)), FUN = identical, colnames(nnlsLM22@fit@H))))
-  combined <- rbind(NNLS=nnlsLM22@fit@H, CIBERSORT=t(CS22$estF), ESTIMATE=data_estimate, MCPcounter=data_mcp, xCell=data_xcell)
+  print(all(sapply(list(colnames(data_cd8), colnames(t(CS22$estF)), colnames(data_estimate), colnames(data_mcp), colnames(data_xcell)), FUN = identical, colnames(nnlsLM22@fit@H))))
+  combined <- rbind(CD8=data_cd8, NNLS=nnlsLM22@fit@H, CIBERSORT=t(CS22$estF), ESTIMATE=data_estimate, MCPcounter=data_mcp, xCell=data_xcell)
   if(outfn != FALSE) {
     write.table(combined, file = file.path(outdir,outfn), sep = "\t")
   }
